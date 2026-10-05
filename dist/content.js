@@ -4,8 +4,11 @@ function getVideo() {
     return (document.querySelector("video") ||
         document.querySelector("video#bitmovinplayer-video-null"));
 }
+function getPlaybackMenuButton() {
+    return document.querySelector('button[aria-label="Playback Speed Menu"]');
+}
 function getPlaybackMenu() {
-    return document.querySelector('[aria-label="Playback Speed"]');
+    return document.querySelector('div[role="menu"][aria-label="Playback Speed"]');
 }
 function setPlaybackSpeed(video, speed) {
     video.playbackRate = speed;
@@ -16,17 +19,47 @@ function createPlaybackMenu(video) {
     menu.className = "kat:overflow-y-auto kat:max-h-468";
     const elements = speeds.map((speed) => createPlaybackMenuItem(video, speed));
     elements.forEach((element) => menu.appendChild(element));
-    return menu;
+    function updateActiveState() {
+        const currentSpeed = video.playbackRate;
+        elements.forEach((element, index) => {
+            const speed = speeds[index];
+            element.ariaChecked = speed === currentSpeed ? "true" : "false";
+            element.className =
+                speed === currentSpeed
+                    ? "kat:flex kat:items-center kat:gap-4 kat:cursor-pointer kat:transition-colors kat:select-none kat:ps-20 kat:pe-20 kat:pt-13 kat:pb-13 kat:bg-white/6 kat:hover:bg-neutral-600 kat:focus-visible:outline-4 kat:focus-visible:-outline-offset-4 kat:focus-visible:outline-orange-500 kat:focus-visible:bg-neutral-600 kat:active:bg-neutral-500"
+                    : "kat:flex kat:items-center kat:gap-4 kat:cursor-pointer kat:transition-colors kat:select-none kat:ps-20 kat:pe-20 kat:pt-13 kat:pb-13 kat:hover:bg-neutral-600 kat:focus-visible:outline-4 kat:focus-visible:-outline-offset-4 kat:focus-visible:outline-orange-500 kat:focus-visible:bg-neutral-600 kat:active:bg-neutral-500";
+            element.removeChild(element.lastElementChild);
+            const iconWrapper = document.createElement("div");
+            iconWrapper.className = "kat:w-24 kat:h-24 kat:shrink-0";
+            if (speed === currentSpeed) {
+                iconWrapper.innerHTML = `<svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="kat:text-white"
+            >
+              <path
+                fill-rule="evenodd"
+                clip-rule="evenodd"
+                d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12ZM15.7929 8.29289L17.2071 9.70711L10.5 16.4142L6.79289 12.7071L8.20711 11.2929L10.5 13.5858L15.7929 8.29289Z"
+                fill="currentColor"
+              ></path>
+            </svg>`;
+            }
+            element.appendChild(iconWrapper);
+        });
+    }
+    updateActiveState();
+    return { menu, updateActiveState };
 }
 function createPlaybackMenuItem(video, speed) {
     const item = document.createElement("div");
     item.role = "menuitemradio";
     item.ariaLabel = `${speed}x`;
-    item.ariaChecked = "false";
     item.ariaDisabled = "false";
     item.tabIndex = 0;
-    item.className =
-        "kat:flex kat:items-center kat:gap-4 kat:cursor-pointer kat:transition-colors kat:select-none kat:ps-20 kat:pe-20 kat:pt-13 kat:pb-13 kat:hover:bg-neutral-600 kat:focus-visible:outline-4 kat:focus-visible:-outline-offset-4 kat:focus-visible:outline-orange-500 kat:focus-visible:bg-neutral-600 kat:active:bg-neutral-500";
     item.addEventListener("click", () => setPlaybackSpeed(video, speed));
     item.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -50,29 +83,38 @@ function createPlaybackMenuItem(video, speed) {
 let currentVideo = null;
 let playbackMenu = null;
 let playbackMenuButton = null;
-function getPlaybackMenuButton() {
-    return document.querySelector('button[aria-label="Playback Speed Menu"]');
-}
+let desiredText = null;
 function onRateChange() {
     console.log("[CAC] Rate changed");
+    if (currentVideo) {
+        desiredText = `${currentVideo.playbackRate}x`;
+    }
+    if (desiredText !== null && playbackMenuButton) {
+        playbackMenuButton.textContent = desiredText;
+    }
+    if (playbackMenu) {
+        playbackMenu.updateActiveState();
+    }
 }
 const observer = new MutationObserver(() => {
     const video = getVideo();
+    const button = getPlaybackMenuButton();
     if (video !== currentVideo) {
         currentVideo?.removeEventListener("ratechange", onRateChange);
         currentVideo = video;
         playbackMenu = video ? createPlaybackMenu(video) : null;
+        playbackMenuButton = button;
         video?.addEventListener("ratechange", onRateChange);
     }
     const menu = getPlaybackMenu();
-    if (!menu || !playbackMenu || playbackMenu.parentElement === menu) {
+    if (!menu || !playbackMenu || playbackMenu.menu.parentElement === menu) {
         return;
     }
     const originalMenu = menu.lastElementChild;
     if (originalMenu instanceof HTMLElement) {
         originalMenu.style.display = "none";
     }
-    menu.appendChild(playbackMenu);
+    menu.appendChild(playbackMenu.menu);
 });
 observer.observe(document.body, {
     subtree: true,
