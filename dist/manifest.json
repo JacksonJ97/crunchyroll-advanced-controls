@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Crunchyroll Advanced Controls",
+  "version": "1.0.0",
+  "description": "Adds additional playback controls to Crunchyroll's video player.",
+  "content_scripts": [
+    {
+      "js": ["content.js"],
+      "matches": ["https://www.crunchyroll.com/*"]
+    }
+  ]
+}

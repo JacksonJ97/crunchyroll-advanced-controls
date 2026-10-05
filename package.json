@@ -1,0 +1,16 @@
+{
+  "name": "crunchyroll-advanced-controls",
+  "type": "module",
+  "author": "JacksonJ97",
+  "version": "1.0.0",
+  "description": "Adds additional playback controls to Crunchyroll's video player.",
+  "main": "dist/content.js",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "chrome-types": "^0.1.452",
+    "typescript": "^7.0.2"
+  }
+}
