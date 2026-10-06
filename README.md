@@ -1,10 +1,10 @@
 # Advanced Video Controls for Crunchyroll
 
-A Chrome extension that adds 1.25x, 1.5x, and 2x playback speeds directly to Crunchyroll's video player, alongside 0.5x, 0.75x, and 1x.
+A Chrome extension that adds 1.25x, 1.5x, and 2x playback speeds directly to Crunchyroll's video player.
 
 ## Motivation
 
-I built this extension while watching One Piece, a series known for its pacing issues. I wanted faster playback controls that felt native to Crunchyroll, accessible directly from the player's existing speed menu instead of an extension popup.
+I built this extension while watching One Piece, a series known for its pacing issues. Crunchyroll's video player currently doesn't offer playback speeds above 1x. While existing extensions provide this functionality through an extension popup, I wanted the playback speed controls to feel native to Crunchyroll by integrating them directly into the video player.
 
 ## Overview
 
