@@ -4,31 +4,14 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 function getVideo() {
     return document.querySelector("video");
 }
-function getPlaybackMenuButton() {
+function getSpeedButton() {
     return document.querySelector('button[aria-label="Playback Speed Menu"]');
 }
-function getPlaybackMenu() {
+function getNativeSpeedMenuContainer() {
     return document.querySelector('div[role="menu"][aria-label="Playback Speed"]');
 }
 function setPlaybackSpeed(video, speed) {
     video.playbackRate = speed;
-}
-function createPlaybackMenu(video) {
-    const menu = document.createElement("div");
-    menu.className = "kat:overflow-y-auto kat:max-h-468";
-    const items = SPEEDS.map((speed) => {
-        const { element, setActive } = createPlaybackMenuItem(video, speed);
-        return { speed, element, setActive };
-    });
-    items.forEach(({ element }) => menu.appendChild(element));
-    function updateActiveState() {
-        const currentSpeed = video.playbackRate;
-        items.forEach(({ speed, setActive }) => {
-            setActive(speed === currentSpeed);
-        });
-    }
-    updateActiveState();
-    return { menu, updateActiveState };
 }
 function createCheckIcon() {
     const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -47,7 +30,7 @@ function createCheckIcon() {
     ></path>`;
     return icon;
 }
-function createPlaybackMenuItem(video, speed) {
+function createSpeedMenuItem(video, speed) {
     const item = document.createElement("div");
     item.role = "menuitemradio";
     item.tabIndex = 0;
@@ -78,44 +61,66 @@ function createPlaybackMenuItem(video, speed) {
     }
     return { element: item, setActive };
 }
-let currentVideo = null;
-let playbackMenu = null;
-let playbackMenuButton = null;
-function updatePlaybackMenuButtonText() {
-    if (!currentVideo || !playbackMenuButton)
+function createCustomSpeedMenu(video) {
+    const menu = document.createElement("div");
+    menu.className = "kat:overflow-y-auto kat:max-h-468";
+    const items = SPEEDS.map((speed) => {
+        const { element, setActive } = createSpeedMenuItem(video, speed);
+        return { speed, element, setActive };
+    });
+    items.forEach(({ element }) => menu.appendChild(element));
+    function refreshSelection() {
+        const currentSpeed = video.playbackRate;
+        items.forEach(({ speed, setActive }) => {
+            setActive(speed === currentSpeed);
+        });
+    }
+    refreshSelection();
+    return { element: menu, refreshSelection };
+}
+let trackedVideo = null;
+let customSpeedMenu = null;
+let speedButton = null;
+function refreshSpeedButtonLabel() {
+    if (!trackedVideo || !speedButton)
         return;
-    const text = `${currentVideo.playbackRate}x`;
-    if (playbackMenuButton.textContent !== text) {
-        playbackMenuButton.textContent = text;
+    const text = `${trackedVideo.playbackRate}x`;
+    if (speedButton.textContent !== text) {
+        speedButton.textContent = text;
     }
 }
-function onRateChange() {
-    updatePlaybackMenuButtonText();
-    playbackMenu?.updateActiveState();
+function handlePlaybackRateChange() {
+    refreshSpeedButtonLabel();
+    customSpeedMenu?.refreshSelection();
+}
+function trackVideo(video) {
+    if (video === trackedVideo)
+        return;
+    trackedVideo?.removeEventListener("ratechange", handlePlaybackRateChange);
+    trackedVideo = video;
+    customSpeedMenu = video ? createCustomSpeedMenu(video) : null;
+    video?.addEventListener("ratechange", handlePlaybackRateChange);
+}
+function mountCustomSpeedMenu(container) {
+    if (!container || !customSpeedMenu)
+        return;
+    const customMenuElement = customSpeedMenu.element;
+    if (customMenuElement.parentElement === container)
+        return;
+    const nativeMenuContent = container.lastElementChild;
+    if (nativeMenuContent instanceof HTMLElement) {
+        nativeMenuContent.style.display = "none";
+    }
+    container.appendChild(customMenuElement);
 }
 function syncPlayerControls() {
-    const video = getVideo();
-    const button = getPlaybackMenuButton();
-    if (video !== currentVideo) {
-        currentVideo?.removeEventListener("ratechange", onRateChange);
-        currentVideo = video;
-        playbackMenu = video ? createPlaybackMenu(video) : null;
-        video?.addEventListener("ratechange", onRateChange);
-    }
-    playbackMenuButton = button;
-    updatePlaybackMenuButtonText();
-    const menu = getPlaybackMenu();
-    if (!menu || !playbackMenu || playbackMenu.menu.parentElement === menu) {
-        return;
-    }
-    const originalMenu = menu.lastElementChild;
-    if (originalMenu instanceof HTMLElement) {
-        originalMenu.style.display = "none";
-    }
-    menu.appendChild(playbackMenu.menu);
+    trackVideo(getVideo());
+    speedButton = getSpeedButton();
+    refreshSpeedButtonLabel();
+    mountCustomSpeedMenu(getNativeSpeedMenuContainer());
 }
-const observer = new MutationObserver(syncPlayerControls);
-observer.observe(document.body, {
+const playerDomObserver = new MutationObserver(syncPlayerControls);
+playerDomObserver.observe(document.body, {
     subtree: true,
     childList: true,
 });
