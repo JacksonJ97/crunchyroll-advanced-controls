@@ -10,7 +10,6 @@
     "build": "tsc"
   },
   "devDependencies": {
-    "chrome-types": "^0.1.452",
     "typescript": "^7.0.2"
   }
 }

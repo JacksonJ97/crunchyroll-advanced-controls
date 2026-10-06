@@ -8,9 +8,6 @@ importers:
 
   .:
     devDependencies:
-      chrome-types:
-        specifier: ^0.1.452
-        version: 0.1.452
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -137,9 +134,6 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  chrome-types@0.1.452:
-    resolution: {integrity: sha512-gGhfH1Ynmp3Lj4C9y+mo7Zf38mAtuubNVQH6jgExExXu6WQm01Q4VOWE8Eafu9RogfUuspRLvEIoqzETxlwcng==}
-
   typescript@7.0.2:
     resolution: {integrity: sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==}
     engines: {node: '>=16.20.0'}
@@ -206,8 +200,6 @@ snapshots:
 
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
-
-  chrome-types@0.1.452: {}
 
   typescript@7.0.2:
     optionalDependencies:

@@ -6,7 +6,6 @@
     "target": "es2025",
     "module": "esnext",
     "lib": ["ES2025", "DOM", "DOM.Iterable"],
-    "types": ["chrome-types"],
 
     "strict": true,
     "noUncheckedIndexedAccess": true,
