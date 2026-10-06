@@ -38,8 +38,7 @@ function createPlaybackMenu(video: HTMLVideoElement) {
     const currentSpeed = video.playbackRate;
 
     items.forEach(({ speed, setActive }) => {
-      const isActive = speed === currentSpeed;
-      setActive(isActive);
+      setActive(speed === currentSpeed);
     });
   }
 
@@ -121,10 +120,7 @@ function updatePlaybackMenuButtonText() {
 
 function onRateChange() {
   updatePlaybackMenuButtonText();
-
-  if (playbackMenu) {
-    playbackMenu.updateActiveState();
-  }
+  playbackMenu?.updateActiveState();
 }
 
 function syncPlayerControls() {
