@@ -7,6 +7,18 @@ function getVideo() {
   return document.querySelector<HTMLVideoElement>("video");
 }
 
+function getRewindButton() {
+  return document.querySelector<HTMLButtonElement>(
+    'button[aria-label="Jump backward 10 seconds"]',
+  );
+}
+
+function getForwardButton() {
+  return document.querySelector<HTMLButtonElement>(
+    'button[aria-label="Jump forward 10 seconds"]',
+  );
+}
+
 function getSpeedButton() {
   return document.querySelector<HTMLButtonElement>(
     'button[aria-label="Playback Speed Menu"]',
@@ -107,6 +119,8 @@ function createCustomSpeedMenu(video: HTMLVideoElement) {
 let trackedVideo: HTMLVideoElement | null = null;
 let customSpeedMenu: ReturnType<typeof createCustomSpeedMenu> | null = null;
 let speedButton: HTMLButtonElement | null = null;
+let rewindButton: HTMLButtonElement | null = null;
+let forwardButton: HTMLButtonElement | null = null;
 
 function refreshSpeedButtonLabel() {
   if (!trackedVideo || !speedButton) return;
@@ -121,6 +135,42 @@ function refreshSpeedButtonLabel() {
 function handlePlaybackRateChange() {
   refreshSpeedButtonLabel();
   customSpeedMenu?.refreshSelection();
+}
+
+function handleSeekKeydown(event: KeyboardEvent) {
+  const key = event.key.toLowerCase();
+
+  if (key !== "j" && key !== "l") return;
+
+  if (
+    event.defaultPrevented ||
+    event.ctrlKey ||
+    event.altKey ||
+    event.metaKey ||
+    event.isComposing
+  )
+    return;
+
+  const target = event.target;
+
+  if (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || target.closest("input, textarea, select"))
+  )
+    return;
+
+  let button: HTMLButtonElement | null = null;
+
+  if (key === "j") {
+    button = rewindButton;
+  } else {
+    button = forwardButton;
+  }
+
+  if (!button || !button.isConnected || button.disabled) return;
+
+  event.preventDefault();
+  button.click();
 }
 
 function trackVideo(video: HTMLVideoElement | null) {
@@ -155,6 +205,9 @@ function syncPlayerControls() {
   speedButton = getSpeedButton();
   refreshSpeedButtonLabel();
 
+  rewindButton = getRewindButton();
+  forwardButton = getForwardButton();
+
   mountCustomSpeedMenu(getNativeSpeedMenuContainer());
 }
 
@@ -166,3 +219,5 @@ playerDomObserver.observe(document.body, {
 });
 
 syncPlayerControls();
+
+window.addEventListener("keydown", handleSeekKeydown);

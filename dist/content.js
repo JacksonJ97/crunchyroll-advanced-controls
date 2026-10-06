@@ -4,6 +4,12 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 function getVideo() {
     return document.querySelector("video");
 }
+function getRewindButton() {
+    return document.querySelector('button[aria-label="Jump backward 10 seconds"]');
+}
+function getForwardButton() {
+    return document.querySelector('button[aria-label="Jump forward 10 seconds"]');
+}
 function getSpeedButton() {
     return document.querySelector('button[aria-label="Playback Speed Menu"]');
 }
@@ -81,6 +87,8 @@ function createCustomSpeedMenu(video) {
 let trackedVideo = null;
 let customSpeedMenu = null;
 let speedButton = null;
+let rewindButton = null;
+let forwardButton = null;
 function refreshSpeedButtonLabel() {
     if (!trackedVideo || !speedButton)
         return;
@@ -92,6 +100,32 @@ function refreshSpeedButtonLabel() {
 function handlePlaybackRateChange() {
     refreshSpeedButtonLabel();
     customSpeedMenu?.refreshSelection();
+}
+function handleSeekKeydown(event) {
+    const key = event.key.toLowerCase();
+    if (key !== "j" && key !== "l")
+        return;
+    if (event.defaultPrevented ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.metaKey ||
+        event.isComposing)
+        return;
+    const target = event.target;
+    if (target instanceof HTMLElement &&
+        (target.isContentEditable || target.closest("input, textarea, select")))
+        return;
+    let button = null;
+    if (key === "j") {
+        button = rewindButton;
+    }
+    else {
+        button = forwardButton;
+    }
+    if (!button || !button.isConnected || button.disabled)
+        return;
+    event.preventDefault();
+    button.click();
 }
 function trackVideo(video) {
     if (video === trackedVideo)
@@ -117,6 +151,8 @@ function syncPlayerControls() {
     trackVideo(getVideo());
     speedButton = getSpeedButton();
     refreshSpeedButtonLabel();
+    rewindButton = getRewindButton();
+    forwardButton = getForwardButton();
     mountCustomSpeedMenu(getNativeSpeedMenuContainer());
 }
 const playerDomObserver = new MutationObserver(syncPlayerControls);
@@ -125,3 +161,4 @@ playerDomObserver.observe(document.body, {
     childList: true,
 });
 syncPlayerControls();
+window.addEventListener("keydown", handleSeekKeydown);

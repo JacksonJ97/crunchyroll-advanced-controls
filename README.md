@@ -1,6 +1,6 @@
 # Advanced Video Controls for Crunchyroll
 
-A Chrome extension that adds 1.25x, 1.5x, and 2x playback speeds directly to Crunchyroll's video player.
+A Chrome extension that adds 1.25x, 1.5x, and 2x playback speeds directly to Crunchyroll's video player, plus keyboard shortcuts to rewind and skip forward.
 
 ## Motivation
 
@@ -10,19 +10,23 @@ I built this extension while watching One Piece, a series known for its pacing i
 
 The extension keeps Crunchyroll's existing speed button and menu container, hides the native menu content, and mounts its own speed options inside that container. Selecting an option changes the HTML video element's `playbackRate`. The button label and selected menu item reflect the video's actual rate, including changes made outside the custom menu.
 
+Press **J** to rewind 10 seconds or **L** to skip forward 10 seconds. These shortcuts trigger the player's existing seek buttons and are ignored while typing in form fields or editable content.
+
 ## How It Works
 
 ### Architecture and entry point
 
 The runtime is a single content script, written in [`src/content.ts`](src/content.ts). TypeScript compiles it to `dist/content.js`. The Manifest V3 configuration in `dist/manifest.json` registers that script for `https://www.crunchyroll.com/*`. There is no background service worker or popup; playback control and UI updates happen in the page's DOM.
 
-The script uses three selectors to find the first matching element in its document:
+The script uses five selectors to find the first matching element in its document:
 
-| Element               | Selector                                        | Purpose                         |
-| --------------------- | ----------------------------------------------- | ------------------------------- |
-| Video                 | `video`                                         | Read and update playback speed. |
-| Speed button          | `button[aria-label="Playback Speed Menu"]`      | Display the current speed.      |
-| Native menu container | `div[role="menu"][aria-label="Playback Speed"]` | Host the custom options.        |
+| Element               | Selector                                        | Purpose                                 |
+| --------------------- | ----------------------------------------------- | --------------------------------------- |
+| Video                 | `video`                                         | Read and update playback speed.         |
+| Speed button          | `button[aria-label="Playback Speed Menu"]`      | Display the current speed.              |
+| Rewind button         | `button[aria-label="Jump backward 10 seconds"]` | Rewind through the native button.       |
+| Forward button        | `button[aria-label="Jump forward 10 seconds"]`  | Skip forward through the native button. |
+| Native menu container | `div[role="menu"][aria-label="Playback Speed"]` | Host the custom options.                |
 
 ### Finding and tracking the player
 
@@ -32,9 +36,18 @@ Each synchronization pass:
 
 1. Queries the video and passes it to `trackVideo()`.
 2. Queries the current speed button and refreshes its label.
-3. Queries the native menu container and attempts to mount the custom menu.
+3. Queries the rewind and forward buttons and updates their stored references.
+4. Queries the native menu container and attempts to mount the custom menu.
 
-Three module-level references preserve state between passes: `trackedVideo`, `customSpeedMenu`, and `speedButton`. If the video reference has not changed, `trackVideo()` returns immediately. When a different video appears, it removes the old video's `ratechange` listener, creates a menu bound to the new video, and attaches the listener to that video. If no video is found, it clears the tracked video and menu references.
+Five module-level references preserve state between passes: `trackedVideo`, `customSpeedMenu`, `speedButton`, `rewindButton`, and `forwardButton`. If the video reference has not changed, `trackVideo()` returns immediately. When a different video appears, it removes the old video's `ratechange` listener, creates a menu bound to the new video, and attaches the listener to that video. If no video is found, it clears the tracked video and menu references.
+
+### Keyboard seek shortcuts
+
+The script registers `handleSeekKeydown()` on `window` once per content-script execution, after the initial synchronization. The observer updates the button references without registering additional keyboard listeners. Each key press reads the current references, so shortcuts continue to use replacement controls after DOM changes.
+
+The handler normalizes the key to lowercase and returns immediately unless it is J or L. It ignores events already prevented by another handler, Ctrl/Alt/Meta combinations, input composition, and events from inputs, textareas, selects, or editable content. Uppercase J and L also work.
+
+For an eligible key press, the handler selects the corresponding button and checks that it exists, is still connected to the document, and is not disabled. Only then does it call `preventDefault()` and `click()`, letting the native button perform the seek. Holding a shortcut key can trigger repeated seeks through repeated `keydown` events.
 
 ### Building and mounting the menu
 
