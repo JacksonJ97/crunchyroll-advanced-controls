@@ -1,6 +1,7 @@
 console.log("[CAC] Content script loaded");
 
-type Speed = 0.5 | 0.75 | 1 | 1.25 | 1.5 | 2;
+const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+type Speed = (typeof SPEEDS)[number];
 
 function getVideo() {
   return document.querySelector<HTMLVideoElement>("video");
@@ -23,27 +24,22 @@ function setPlaybackSpeed(video: HTMLVideoElement, speed: Speed) {
 }
 
 function createPlaybackMenu(video: HTMLVideoElement) {
-  const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
-
   const menu = document.createElement("div");
   menu.className = "kat:overflow-y-auto kat:max-h-468";
 
-  const elements = speeds.map((speed) => createPlaybackMenuItem(video, speed));
-  elements.forEach((element) => menu.appendChild(element));
+  const items = SPEEDS.map((speed) => {
+    const { element, setActive } = createPlaybackMenuItem(video, speed);
+    return { speed, element, setActive };
+  });
+
+  items.forEach(({ element }) => menu.appendChild(element));
 
   function updateActiveState() {
-    const currentSpeed = video.playbackRate as Speed;
+    const currentSpeed = video.playbackRate;
 
-    elements.forEach((element, index) => {
-      const speed = speeds[index];
-      element.ariaChecked = speed === currentSpeed ? "true" : "false";
-      element.classList.toggle("kat:bg-white/6", speed === currentSpeed);
-
-      const icon = element.querySelector("svg");
-
-      if (icon) {
-        icon.style.visibility = speed === currentSpeed ? "visible" : "hidden";
-      }
+    items.forEach(({ speed, setActive }) => {
+      const isActive = speed === currentSpeed;
+      setActive(isActive);
     });
   }
 
@@ -89,7 +85,18 @@ function createPlaybackMenuItem(video: HTMLVideoElement, speed: Speed) {
     ></path>`;
   item.appendChild(icon);
 
-  return item;
+  let previousActive: boolean | null = null;
+
+  function setActive(active: boolean) {
+    if (active === previousActive) return;
+    previousActive = active;
+
+    item.ariaChecked = String(active);
+    item.classList.toggle("kat:bg-white/6", active);
+    icon.style.visibility = active ? "visible" : "hidden";
+  }
+
+  return { element: item, setActive };
 }
 
 let currentVideo: HTMLVideoElement | null = null;
