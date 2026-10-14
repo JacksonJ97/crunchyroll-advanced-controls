@@ -99,6 +99,7 @@ function refreshSpeedButtonLabel() {
 }
 function handlePlaybackRateChange() {
     refreshSpeedButtonLabel();
+    speedButton?.click();
     customSpeedMenu?.refreshSelection();
 }
 function handleSeekKeydown(event) {

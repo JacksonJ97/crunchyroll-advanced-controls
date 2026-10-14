@@ -134,6 +134,7 @@ function refreshSpeedButtonLabel() {
 
 function handlePlaybackRateChange() {
   refreshSpeedButtonLabel();
+  speedButton?.click();
   customSpeedMenu?.refreshSelection();
 }
 
