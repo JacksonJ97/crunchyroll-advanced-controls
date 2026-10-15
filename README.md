@@ -10,7 +10,7 @@ I built this extension while watching One Piece, a series known for its pacing i
 
 The extension keeps Crunchyroll's existing playback menu trigger and menu container, hides the original menu content, and mounts its own speed options inside that container. Selecting an option changes the HTML video element's `playbackRate`, saves the preference in the page's `localStorage`, and closes the menu through the existing playback menu trigger. Options support clicks, Enter, and Space.
 
-The script restores a supported saved speed at startup, defaults to 1x otherwise, and applies that preference to replacement videos. Playback events restore the preferred speed if the player or another control changes it. The button label and selected menu item reflect the video's rate after synchronization.
+The script restores a supported saved speed at startup, defaults to 1x otherwise, and applies that target speed to replacement videos. Crunchyroll resets playback to 1x when playback controls are used, so the script listens for playback events and restores the target speed. The button label and selected menu item reflect the video's rate after synchronization.
 
 Press **J** to rewind 10 seconds or **L** to skip forward 10 seconds. These shortcuts trigger the player's existing seek buttons and are ignored while typing in form fields or editable content.
 
@@ -49,7 +49,7 @@ Each synchronization pass:
 3. Updates the cached menu trigger and refreshes its label.
 4. Attempts to mount the custom menu in the native container.
 
-The script caches the current video and menu trigger, creates one reusable `customPlaybackMenu`, and stores the preferred speed in `globalPlaybackSpeed`. If the video reference has not changed, `updateVideo()` returns immediately. When a different video appears, it removes the old video's listeners, attaches listeners for `ratechange`, `play`, `pause`, `seeking`, and `seeked` to the new video, and immediately synchronizes its speed. If no video is found, it clears the cached video and refreshes the menu to clear its selection.
+The script tracks the video in `currentVideo` and the native speed button in `playbackMenuTrigger`, creates one reusable `customPlaybackMenu`, and stores the speed the video should maintain in `targetPlaybackSpeed`. If the video reference has not changed, `updateVideo()` returns immediately. When a different video appears, it removes the old video's listeners, attaches the events listed in `PLAYBACK_SYNC_EVENTS` (`play`, `pause`, `seeked`, `seeking`, and `ratechange`) to the new video, and immediately synchronizes its speed. If no video is found, it clears `currentVideo` and refreshes the menu to clear its selection.
 
 ### Keyboard seek shortcuts
 
@@ -61,7 +61,7 @@ For an eligible key press, the handler selects the corresponding button and chec
 
 ### Building and mounting the menu
 
-`createCustomPlaybackMenu()` creates one item for each value in `SPEEDS`: `0.5`, `0.75`, `1`, `1.25`, `1.5`, and `2`. Each item's event handlers use the current cached video rather than capturing a particular video element. A click, Enter, or Space calls `setPlaybackSpeed()`, then clicks the cached native menu trigger to close the menu. If a cached video exists, `setPlaybackSpeed()` assigns its `playbackRate`, updates `globalPlaybackSpeed`, and saves the value in `localStorage` under `playbackRate`.
+`createCustomPlaybackMenu()` creates one item for each value in `PLAYBACK_SPEEDS`: `0.5`, `0.75`, `1`, `1.25`, `1.5`, and `2`. Each item's event handlers use `currentVideo` rather than capturing a particular video element. A click, Enter, or Space prevents the event's default action, calls `setPlaybackSpeed()`, then clicks `playbackMenuTrigger` if present to close the menu. Other keys are ignored. If a video exists, `setPlaybackSpeed()` assigns its `playbackRate`, updates `targetPlaybackSpeed`, and saves the value in `localStorage` under `playbackRate`. Without a video, it leaves the target and saved speed unchanged.
 
 The items reuse Crunchyroll's `kat:` CSS classes for layout, hover, focus, and selection styling. Each item has `role="menuitemradio"`, is focusable with `tabIndex = 0`, and contains a speed label and an SVG check icon.
 
@@ -71,19 +71,19 @@ The same custom menu is reused across video replacements. If Crunchyroll recreat
 
 ### Keeping playback state and UI synchronized
 
-At startup, the script converts the `localStorage` value at `playbackRate` to a number and checks it against `SPEEDS`. A supported value becomes `globalPlaybackSpeed`; otherwise, the preference starts at `1`.
+At startup, the script converts the `localStorage` value at `playbackRate` to a number and stores it in `savedPlaybackSpeed`. It checks that value against `PLAYBACK_SPEEDS` to initialize `targetPlaybackSpeed`, defaulting to `1` if the saved value is unsupported or missing. The target is the rate the video should maintain; `currentVideo.playbackRate` is its actual rate.
 
-`syncPlaybackSpeed()` runs when a new video is tracked and on its `ratechange`, `play`, `pause`, `seeking`, and `seeked` events. If the video's rate differs from `globalPlaybackSpeed`, it restores the preferred rate. A change made by the player or another control therefore does not become the new saved preference.
+`syncPlaybackSpeed()` runs when a new video is tracked and on every event in `PLAYBACK_SYNC_EVENTS`. If the video's actual rate differs from `targetPlaybackSpeed`, it restores the target rate. This corrects Crunchyroll's reset to 1x after using playback controls. These resets do not change the target or the saved value; selecting a custom menu option updates both.
 
 After synchronizing the rate, the function updates the button label and runs the menu's `refreshSelection()` function. That function compares each option with the cached video's actual rate and updates its `aria-checked` value, background class, and check-icon visibility. Selection is also initialized when the menu is created.
 
-To avoid unnecessary DOM writes, `updatePlaybackMenuTriggerLabel()` only changes the button's text when it differs, and each item's `setActive()` caches its previous active state. These guards, together with the video-reference and menu-parent checks, let repeated observer callbacks reuse existing controls. They also prevent the extension's own child-node changes from causing an endless update cycle.
+To avoid unnecessary DOM writes, `updatePlaybackMenuTriggerLabel()` only changes the button's text when it differs, and each item's `setSelected()` compares the new state with `previousSelectionState` before updating the DOM. That state starts at `null` so the first call always renders the item's selection state. These guards, together with the video-reference and menu-parent checks, let repeated observer callbacks reuse existing controls. They also prevent the extension's own child-node changes from causing an endless update cycle.
 
 ### Current boundaries
 
 The implementation depends on Crunchyroll's DOM structure, English accessibility labels, and existing `kat:` styles. Changes to those selectors, classes, or the assumption that native menu content is the container's last element child may require code updates. It controls only the first video found in the content script's document.
 
-Saved preferences use the page's `localStorage`, not Chrome extension storage. The script does not catch storage access errors or listen for storage changes from other tabs. Clearing that storage removes the saved preference for future script executions. Synchronization restores the selected preference if another control changes the video's rate.
+Saved preferences use the page's `localStorage`, not Chrome extension storage. The script does not catch storage access errors or listen for storage changes from other tabs. Clearing that storage removes the saved preference for future script executions. Synchronization restores the target speed if another control changes the video's rate.
 
 ## Development
 
