@@ -212,40 +212,34 @@ playerDomObserver.observe(document.body, {
 
 syncPlayerControls();
 
-// function handleSeekKeydown(event: KeyboardEvent) {
-//   const key = event.key.toLowerCase();
+function handleSeekKeydown(event: KeyboardEvent) {
+  const key = event.key.toLowerCase();
 
-//   if (key !== "j" && key !== "l") return;
+  if (key !== "j" && key !== "l") return;
 
-//   if (
-//     event.defaultPrevented ||
-//     event.ctrlKey ||
-//     event.altKey ||
-//     event.metaKey ||
-//     event.isComposing
-//   )
-//     return;
+  if (
+    event.defaultPrevented ||
+    event.ctrlKey ||
+    event.altKey ||
+    event.metaKey ||
+    event.isComposing
+  )
+    return;
 
-//   const target = event.target;
+  const target = event.target;
 
-//   if (
-//     target instanceof HTMLElement &&
-//     (target.isContentEditable || target.closest("input, textarea, select"))
-//   )
-//     return;
+  if (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || target.closest("input, textarea, select"))
+  )
+    return;
 
-//   let button: HTMLButtonElement | null = null;
+  const button = key === "j" ? getRewindButton() : getForwardButton();
 
-//   if (key === "j") {
-//     button = rewindButton;
-//   } else {
-//     button = forwardButton;
-//   }
+  if (!button || !button.isConnected || button.disabled) return;
 
-//   if (!button || !button.isConnected || button.disabled) return;
+  event.preventDefault();
+  button.click();
+}
 
-//   event.preventDefault();
-//   button.click();
-// }
-
-// window.addEventListener("keydown", handleSeekKeydown);
+window.addEventListener("keydown", handleSeekKeydown);
