@@ -6,7 +6,7 @@
   "content_scripts": [
     {
       "js": ["content.js"],
-      "matches": ["https://www.crunchyroll.com/watch/*"]
+      "matches": ["https://www.crunchyroll.com/*"]
     }
   ],
   "icons": {
