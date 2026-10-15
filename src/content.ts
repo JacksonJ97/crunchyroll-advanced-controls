@@ -3,36 +3,45 @@ console.log("[CAC] Content script loaded");
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 type Speed = (typeof SPEEDS)[number];
 
-function getVideo() {
-  return document.querySelector<HTMLVideoElement>("video");
+function getVideo(): HTMLVideoElement | null {
+  return document.querySelector("video");
 }
 
-function getRewindButton() {
-  return document.querySelector<HTMLButtonElement>(
+function getRewindButton(): HTMLButtonElement | null {
+  return document.querySelector(
     'button[aria-label="Jump backward 10 seconds"]',
   );
 }
 
-function getForwardButton() {
-  return document.querySelector<HTMLButtonElement>(
-    'button[aria-label="Jump forward 10 seconds"]',
-  );
+function getForwardButton(): HTMLButtonElement | null {
+  return document.querySelector('button[aria-label="Jump forward 10 seconds"]');
 }
 
-function getSpeedButton() {
-  return document.querySelector<HTMLButtonElement>(
-    'button[aria-label="Playback Speed Menu"]',
-  );
+function getPlaybackSpeedMenuTrigger(): HTMLButtonElement | null {
+  return document.querySelector('button[aria-label="Playback Speed Menu"]');
 }
 
-function getNativeSpeedMenuContainer() {
-  return document.querySelector<HTMLDivElement>(
+function getPlaybackSpeedMenu(): HTMLDivElement | null {
+  return document.querySelector(
     'div[role="menu"][aria-label="Playback Speed"]',
   );
 }
 
+let trackedVideo: HTMLVideoElement | null = null;
+let rewindButton: HTMLButtonElement | null = null;
+let forwardButton: HTMLButtonElement | null = null;
+let playbackSpeedTrigger: HTMLButtonElement | null = null;
+
+let customSpeedMenu: ReturnType<typeof createCustomSpeedMenu> | null = null;
+
+let globalPlaybackSpeed = Number.isFinite(localStorage.getItem("playbackRate"))
+  ? Number(localStorage.getItem("playbackRate"))
+  : 1;
+
 function setPlaybackSpeed(video: HTMLVideoElement, speed: Speed) {
   video.playbackRate = speed;
+  globalPlaybackSpeed = speed;
+  localStorage.setItem("playbackRate", `${speed}`);
 }
 
 function createCheckIcon() {
@@ -61,11 +70,16 @@ function createSpeedMenuItem(video: HTMLVideoElement, speed: Speed) {
   item.className =
     "kat:flex kat:items-center kat:gap-4 kat:cursor-pointer kat:transition-colors kat:select-none kat:ps-20 kat:pe-20 kat:pt-13 kat:pb-13 kat:hover:bg-neutral-600 kat:focus-visible:outline-4 kat:focus-visible:-outline-offset-4 kat:focus-visible:outline-orange-500 kat:focus-visible:bg-neutral-600 kat:active:bg-neutral-500";
 
-  item.addEventListener("click", () => setPlaybackSpeed(video, speed));
+  item.addEventListener("click", (event) => {
+    event.preventDefault();
+    setPlaybackSpeed(video, speed);
+    playbackSpeedTrigger?.click();
+  });
   item.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       setPlaybackSpeed(video, speed);
+      playbackSpeedTrigger?.click();
     }
   });
 
@@ -116,27 +130,93 @@ function createCustomSpeedMenu(video: HTMLVideoElement) {
   return { element: menu, refreshSelection };
 }
 
-let trackedVideo: HTMLVideoElement | null = null;
-let customSpeedMenu: ReturnType<typeof createCustomSpeedMenu> | null = null;
-let speedButton: HTMLButtonElement | null = null;
-let rewindButton: HTMLButtonElement | null = null;
-let forwardButton: HTMLButtonElement | null = null;
+function syncPlaybackSpeed() {
+  if (!trackedVideo || !playbackSpeedTrigger) return;
 
-function refreshSpeedButtonLabel() {
-  if (!trackedVideo || !speedButton) return;
+  if (trackedVideo.playbackRate !== globalPlaybackSpeed) {
+    trackedVideo.playbackRate = globalPlaybackSpeed;
+  }
 
   const text = `${trackedVideo.playbackRate}x`;
-
-  if (speedButton.textContent !== text) {
-    speedButton.textContent = text;
+  if (playbackSpeedTrigger.textContent !== text) {
+    playbackSpeedTrigger.textContent = text;
   }
 }
 
 function handlePlaybackRateChange() {
-  refreshSpeedButtonLabel();
-  speedButton?.click();
+  syncPlaybackSpeed();
   customSpeedMenu?.refreshSelection();
 }
+
+function handlePlay() {
+  syncPlaybackSpeed();
+}
+
+function handlePause() {
+  syncPlaybackSpeed();
+}
+
+function handleSeeking() {
+  syncPlaybackSpeed();
+}
+
+function handleSeeked() {
+  syncPlaybackSpeed();
+}
+
+function trackVideo(currentVideo: HTMLVideoElement | null) {
+  if (currentVideo === trackedVideo) return;
+
+  trackedVideo?.removeEventListener("ratechange", handlePlaybackRateChange);
+  trackedVideo?.removeEventListener("play", handlePlay);
+  trackedVideo?.removeEventListener("pause", handlePause);
+  trackedVideo?.removeEventListener("seeking", handleSeeking);
+  trackedVideo?.removeEventListener("seeked", handleSeeked);
+
+  trackedVideo = currentVideo;
+  customSpeedMenu = currentVideo ? createCustomSpeedMenu(currentVideo) : null;
+
+  currentVideo?.addEventListener("ratechange", handlePlaybackRateChange);
+  currentVideo?.addEventListener("play", handlePlay);
+  currentVideo?.addEventListener("pause", handlePause);
+  currentVideo?.addEventListener("seeking", handleSeeking);
+  currentVideo?.addEventListener("seeked", handleSeeked);
+}
+
+function mountCustomSpeedMenu(container: HTMLDivElement | null) {
+  if (!container || !customSpeedMenu) return;
+
+  const customMenuElement = customSpeedMenu.element;
+  if (customMenuElement.parentElement === container) return;
+
+  const nativeMenuContent = container.lastElementChild;
+
+  if (nativeMenuContent instanceof HTMLElement) {
+    nativeMenuContent.style.display = "none";
+  }
+
+  container.appendChild(customMenuElement);
+}
+
+function syncPlayerControls() {
+  trackVideo(getVideo());
+
+  playbackSpeedTrigger = getPlaybackSpeedMenuTrigger();
+  syncPlaybackSpeed();
+  rewindButton = getRewindButton();
+  forwardButton = getForwardButton();
+
+  mountCustomSpeedMenu(getPlaybackSpeedMenu());
+}
+
+const playerDomObserver = new MutationObserver(syncPlayerControls);
+
+playerDomObserver.observe(document.body, {
+  subtree: true,
+  childList: true,
+});
+
+syncPlayerControls();
 
 function handleSeekKeydown(event: KeyboardEvent) {
   const key = event.key.toLowerCase();
@@ -173,52 +253,5 @@ function handleSeekKeydown(event: KeyboardEvent) {
   event.preventDefault();
   button.click();
 }
-
-function trackVideo(video: HTMLVideoElement | null) {
-  if (video === trackedVideo) return;
-
-  trackedVideo?.removeEventListener("ratechange", handlePlaybackRateChange);
-
-  trackedVideo = video;
-  customSpeedMenu = video ? createCustomSpeedMenu(video) : null;
-
-  video?.addEventListener("ratechange", handlePlaybackRateChange);
-}
-
-function mountCustomSpeedMenu(container: HTMLDivElement | null) {
-  if (!container || !customSpeedMenu) return;
-
-  const customMenuElement = customSpeedMenu.element;
-  if (customMenuElement.parentElement === container) return;
-
-  const nativeMenuContent = container.lastElementChild;
-
-  if (nativeMenuContent instanceof HTMLElement) {
-    nativeMenuContent.style.display = "none";
-  }
-
-  container.appendChild(customMenuElement);
-}
-
-function syncPlayerControls() {
-  trackVideo(getVideo());
-
-  speedButton = getSpeedButton();
-  refreshSpeedButtonLabel();
-
-  rewindButton = getRewindButton();
-  forwardButton = getForwardButton();
-
-  mountCustomSpeedMenu(getNativeSpeedMenuContainer());
-}
-
-const playerDomObserver = new MutationObserver(syncPlayerControls);
-
-playerDomObserver.observe(document.body, {
-  subtree: true,
-  childList: true,
-});
-
-syncPlayerControls();
 
 window.addEventListener("keydown", handleSeekKeydown);
