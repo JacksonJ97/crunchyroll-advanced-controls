@@ -1,7 +1,21 @@
 console.log("[CAC] Content script loaded");
 
-const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
-type Speed = (typeof SPEEDS)[number];
+const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+const PLAYBACK_SYNC_EVENTS = [
+  "play",
+  "pause",
+  "seeked",
+  "seeking",
+  "ratechange",
+] as const;
+type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number];
+
+let currentVideo: HTMLVideoElement | null = null;
+let playbackMenuTrigger: HTMLButtonElement | null = null;
+
+const savedPlaybackSpeed = Number(localStorage.getItem("playbackRate"));
+let targetPlaybackSpeed =
+  PLAYBACK_SPEEDS.find((speed) => speed === savedPlaybackSpeed) ?? 1;
 
 function getVideo(): HTMLVideoElement | null {
   return document.querySelector("video");
@@ -46,15 +60,15 @@ function createCheckIcon() {
   return icon;
 }
 
-function setPlaybackSpeed(speed: Speed) {
-  if (!cachedVideo) return;
+function setPlaybackSpeed(speed: PlaybackSpeed) {
+  if (!currentVideo) return;
 
-  cachedVideo.playbackRate = speed;
-  globalPlaybackSpeed = speed;
+  currentVideo.playbackRate = speed;
+  targetPlaybackSpeed = speed;
   localStorage.setItem("playbackRate", `${speed}`);
 }
 
-function createPlaybackMenuItem(speed: Speed) {
+function createPlaybackMenuItem(speed: PlaybackSpeed) {
   const item = document.createElement("div");
   item.role = "menuitemradio";
   item.tabIndex = 0;
@@ -64,14 +78,13 @@ function createPlaybackMenuItem(speed: Speed) {
   item.addEventListener("click", (event) => {
     event.preventDefault();
     setPlaybackSpeed(speed);
-    cachedPlaybackMenuTrigger?.click();
+    playbackMenuTrigger?.click();
   });
   item.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      setPlaybackSpeed(speed);
-      cachedPlaybackMenuTrigger?.click();
-    }
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    setPlaybackSpeed(speed);
+    playbackMenuTrigger?.click();
   });
 
   const label = document.createElement("span");
@@ -83,36 +96,36 @@ function createPlaybackMenuItem(speed: Speed) {
   const icon = createCheckIcon();
   item.appendChild(icon);
 
-  let previousActive: boolean | null = null;
+  let previousSelectionState: boolean | null = null;
 
-  function setActive(active: boolean) {
-    if (active === previousActive) return;
-    previousActive = active;
+  function setSelected(isSelected: boolean) {
+    if (isSelected === previousSelectionState) return;
+    previousSelectionState = isSelected;
 
-    item.ariaChecked = String(active);
-    item.classList.toggle("kat:bg-white/6", active);
-    icon.style.visibility = active ? "visible" : "hidden";
+    item.ariaChecked = String(isSelected);
+    item.classList.toggle("kat:bg-white/6", isSelected);
+    icon.style.visibility = isSelected ? "visible" : "hidden";
   }
 
-  return { element: item, setActive };
+  return { element: item, setSelected };
 }
 
 function createCustomPlaybackMenu() {
   const menu = document.createElement("div");
   menu.className = "kat:overflow-y-auto kat:max-h-468";
 
-  const items = SPEEDS.map((speed) => {
-    const { element, setActive } = createPlaybackMenuItem(speed);
-    return { speed, element, setActive };
+  const items = PLAYBACK_SPEEDS.map((speed) => {
+    const { element, setSelected } = createPlaybackMenuItem(speed);
+    return { speed, element, setSelected };
   });
 
   items.forEach(({ element }) => menu.appendChild(element));
 
   function refreshSelection() {
-    const currentSpeed = cachedVideo?.playbackRate;
+    const currentSpeed = currentVideo?.playbackRate;
 
-    items.forEach(({ speed, setActive }) => {
-      setActive(speed === currentSpeed);
+    items.forEach(({ speed, setSelected }) => {
+      setSelected(speed === currentSpeed);
     });
   }
 
@@ -121,76 +134,69 @@ function createCustomPlaybackMenu() {
   return { element: menu, refreshSelection };
 }
 
-let cachedVideo: HTMLVideoElement | null = null;
-let cachedPlaybackMenuTrigger: HTMLButtonElement | null = null;
 const customPlaybackMenu = createCustomPlaybackMenu();
 
-const savedSpeed = Number(localStorage.getItem("playbackRate"));
-let globalPlaybackSpeed = SPEEDS.find((speed) => speed === savedSpeed) ?? 1;
-
 function updatePlaybackMenuTriggerLabel() {
-  if (!cachedVideo || !cachedPlaybackMenuTrigger) return;
+  if (!currentVideo || !playbackMenuTrigger) return;
 
-  const text = `${cachedVideo.playbackRate}x`;
+  const label = `${currentVideo.playbackRate}x`;
 
-  if (cachedPlaybackMenuTrigger.textContent !== text) {
-    cachedPlaybackMenuTrigger.textContent = text;
+  if (playbackMenuTrigger.textContent !== label) {
+    playbackMenuTrigger.textContent = label;
   }
 }
 
 function syncPlaybackSpeed() {
-  if (!cachedVideo) return;
+  if (!currentVideo) return;
 
-  if (cachedVideo.playbackRate !== globalPlaybackSpeed) {
-    cachedVideo.playbackRate = globalPlaybackSpeed;
+  if (currentVideo.playbackRate !== targetPlaybackSpeed) {
+    currentVideo.playbackRate = targetPlaybackSpeed;
   }
 
   updatePlaybackMenuTriggerLabel();
   customPlaybackMenu.refreshSelection();
 }
 
-function updateVideo(video: HTMLVideoElement | null) {
-  if (video === cachedVideo) return;
+function updateVideo(nextVideo: HTMLVideoElement | null) {
+  if (nextVideo === currentVideo) return;
 
-  if (cachedVideo) {
-    cachedVideo.removeEventListener("ratechange", syncPlaybackSpeed);
-    cachedVideo.removeEventListener("play", syncPlaybackSpeed);
-    cachedVideo.removeEventListener("pause", syncPlaybackSpeed);
-    cachedVideo.removeEventListener("seeking", syncPlaybackSpeed);
-    cachedVideo.removeEventListener("seeked", syncPlaybackSpeed);
+  if (currentVideo) {
+    for (const event of PLAYBACK_SYNC_EVENTS) {
+      currentVideo.removeEventListener(event, syncPlaybackSpeed);
+    }
   }
 
-  cachedVideo = video;
+  currentVideo = nextVideo;
 
-  if (video) {
-    video.addEventListener("ratechange", syncPlaybackSpeed);
-    video.addEventListener("play", syncPlaybackSpeed);
-    video.addEventListener("pause", syncPlaybackSpeed);
-    video.addEventListener("seeking", syncPlaybackSpeed);
-    video.addEventListener("seeked", syncPlaybackSpeed);
-    // Updates the new video to the global playback speed
-    syncPlaybackSpeed();
-  } else {
-    // If video is null we refresh the selection so that it clears the selected option
+  // If the new video is null we refresh the selection so that it clears the selected option
+  if (!currentVideo) {
     customPlaybackMenu.refreshSelection();
+    return;
   }
+
+  for (const event of PLAYBACK_SYNC_EVENTS) {
+    currentVideo.addEventListener(event, syncPlaybackSpeed);
+  }
+
+  // Updates the new video to the target playback speed
+  syncPlaybackSpeed();
 }
 
 function updatePlaybackMenuTrigger(trigger: HTMLButtonElement | null) {
-  cachedPlaybackMenuTrigger = trigger;
+  playbackMenuTrigger = trigger;
   updatePlaybackMenuTriggerLabel();
 }
 
 function mountCustomPlaybackMenu(menu: HTMLDivElement | null) {
-  if (menu && customPlaybackMenu.element.parentElement !== menu) {
-    const content = menu.lastElementChild;
+  if (!menu || customPlaybackMenu.element.parentElement === menu) return;
 
-    if (content instanceof HTMLElement) {
-      content.style.display = "none";
-    }
+  const menuContent = menu.lastElementChild;
 
-    menu.appendChild(customPlaybackMenu.element);
+  if (menuContent instanceof HTMLElement) {
+    menuContent.style.display = "none";
   }
+
+  menu.appendChild(customPlaybackMenu.element);
 }
 
 function syncPlayerControls() {
@@ -223,23 +229,25 @@ function handleSeekKeydown(event: KeyboardEvent) {
     event.altKey ||
     event.metaKey ||
     event.isComposing
-  )
+  ) {
     return;
+  }
 
   const target = event.target;
 
   if (
     target instanceof HTMLElement &&
     (target.isContentEditable || target.closest("input, textarea, select"))
-  )
+  ) {
     return;
+  }
 
-  const button = key === "j" ? getRewindButton() : getForwardButton();
+  const seekButton = key === "j" ? getRewindButton() : getForwardButton();
 
-  if (!button || !button.isConnected || button.disabled) return;
+  if (!seekButton || !seekButton.isConnected || seekButton.disabled) return;
 
   event.preventDefault();
-  button.click();
+  seekButton.click();
 }
 
 window.addEventListener("keydown", handleSeekKeydown);
