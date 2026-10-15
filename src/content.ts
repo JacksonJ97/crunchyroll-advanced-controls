@@ -17,31 +17,14 @@ function getForwardButton(): HTMLButtonElement | null {
   return document.querySelector('button[aria-label="Jump forward 10 seconds"]');
 }
 
-function getPlaybackSpeedMenuTrigger(): HTMLButtonElement | null {
+function getPlaybackMenuTrigger(): HTMLButtonElement | null {
   return document.querySelector('button[aria-label="Playback Speed Menu"]');
 }
 
-function getPlaybackSpeedMenu(): HTMLDivElement | null {
+function getPlaybackMenu(): HTMLDivElement | null {
   return document.querySelector(
     'div[role="menu"][aria-label="Playback Speed"]',
   );
-}
-
-let trackedVideo: HTMLVideoElement | null = null;
-let rewindButton: HTMLButtonElement | null = null;
-let forwardButton: HTMLButtonElement | null = null;
-let playbackSpeedTrigger: HTMLButtonElement | null = null;
-
-let customSpeedMenu: ReturnType<typeof createCustomSpeedMenu> | null = null;
-
-let globalPlaybackSpeed = Number.isFinite(localStorage.getItem("playbackRate"))
-  ? Number(localStorage.getItem("playbackRate"))
-  : 1;
-
-function setPlaybackSpeed(video: HTMLVideoElement, speed: Speed) {
-  video.playbackRate = speed;
-  globalPlaybackSpeed = speed;
-  localStorage.setItem("playbackRate", `${speed}`);
 }
 
 function createCheckIcon() {
@@ -63,7 +46,15 @@ function createCheckIcon() {
   return icon;
 }
 
-function createSpeedMenuItem(video: HTMLVideoElement, speed: Speed) {
+function setPlaybackSpeed(speed: Speed) {
+  if (!cachedVideo) return;
+
+  cachedVideo.playbackRate = speed;
+  globalPlaybackSpeed = speed;
+  localStorage.setItem("playbackRate", `${speed}`);
+}
+
+function createPlaybackMenuItem(speed: Speed) {
   const item = document.createElement("div");
   item.role = "menuitemradio";
   item.tabIndex = 0;
@@ -72,14 +63,14 @@ function createSpeedMenuItem(video: HTMLVideoElement, speed: Speed) {
 
   item.addEventListener("click", (event) => {
     event.preventDefault();
-    setPlaybackSpeed(video, speed);
-    playbackSpeedTrigger?.click();
+    setPlaybackSpeed(speed);
+    cachedPlaybackMenuTrigger?.click();
   });
   item.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      setPlaybackSpeed(video, speed);
-      playbackSpeedTrigger?.click();
+      setPlaybackSpeed(speed);
+      cachedPlaybackMenuTrigger?.click();
     }
   });
 
@@ -106,19 +97,19 @@ function createSpeedMenuItem(video: HTMLVideoElement, speed: Speed) {
   return { element: item, setActive };
 }
 
-function createCustomSpeedMenu(video: HTMLVideoElement) {
+function createCustomPlaybackMenu() {
   const menu = document.createElement("div");
   menu.className = "kat:overflow-y-auto kat:max-h-468";
 
   const items = SPEEDS.map((speed) => {
-    const { element, setActive } = createSpeedMenuItem(video, speed);
+    const { element, setActive } = createPlaybackMenuItem(speed);
     return { speed, element, setActive };
   });
 
   items.forEach(({ element }) => menu.appendChild(element));
 
   function refreshSelection() {
-    const currentSpeed = video.playbackRate;
+    const currentSpeed = cachedVideo?.playbackRate;
 
     items.forEach(({ speed, setActive }) => {
       setActive(speed === currentSpeed);
@@ -130,83 +121,86 @@ function createCustomSpeedMenu(video: HTMLVideoElement) {
   return { element: menu, refreshSelection };
 }
 
+let cachedVideo: HTMLVideoElement | null = null;
+let cachedPlaybackMenuTrigger: HTMLButtonElement | null = null;
+const customPlaybackMenu = createCustomPlaybackMenu();
+
+const savedSpeed = Number(localStorage.getItem("playbackRate"));
+let globalPlaybackSpeed = SPEEDS.find((speed) => speed === savedSpeed) ?? 1;
+
+function updatePlaybackMenuTriggerLabel() {
+  if (!cachedVideo || !cachedPlaybackMenuTrigger) return;
+
+  const text = `${cachedVideo.playbackRate}x`;
+
+  if (cachedPlaybackMenuTrigger.textContent !== text) {
+    cachedPlaybackMenuTrigger.textContent = text;
+  }
+}
+
 function syncPlaybackSpeed() {
-  if (!trackedVideo || !playbackSpeedTrigger) return;
+  if (!cachedVideo) return;
 
-  if (trackedVideo.playbackRate !== globalPlaybackSpeed) {
-    trackedVideo.playbackRate = globalPlaybackSpeed;
+  if (cachedVideo.playbackRate !== globalPlaybackSpeed) {
+    cachedVideo.playbackRate = globalPlaybackSpeed;
   }
 
-  const text = `${trackedVideo.playbackRate}x`;
-  if (playbackSpeedTrigger.textContent !== text) {
-    playbackSpeedTrigger.textContent = text;
+  updatePlaybackMenuTriggerLabel();
+  customPlaybackMenu.refreshSelection();
+}
+
+function updateVideo(video: HTMLVideoElement | null) {
+  if (video === cachedVideo) return;
+
+  if (cachedVideo) {
+    cachedVideo.removeEventListener("ratechange", syncPlaybackSpeed);
+    cachedVideo.removeEventListener("play", syncPlaybackSpeed);
+    cachedVideo.removeEventListener("pause", syncPlaybackSpeed);
+    cachedVideo.removeEventListener("seeking", syncPlaybackSpeed);
+    cachedVideo.removeEventListener("seeked", syncPlaybackSpeed);
+  }
+
+  cachedVideo = video;
+
+  if (video) {
+    video.addEventListener("ratechange", syncPlaybackSpeed);
+    video.addEventListener("play", syncPlaybackSpeed);
+    video.addEventListener("pause", syncPlaybackSpeed);
+    video.addEventListener("seeking", syncPlaybackSpeed);
+    video.addEventListener("seeked", syncPlaybackSpeed);
+    // Updates the new video to the global playback speed
+    syncPlaybackSpeed();
+  } else {
+    // If video is null we refresh the selection so that it clears the selected option
+    customPlaybackMenu.refreshSelection();
   }
 }
 
-function handlePlaybackRateChange() {
-  syncPlaybackSpeed();
-  customSpeedMenu?.refreshSelection();
+function updatePlaybackMenuTrigger(trigger: HTMLButtonElement | null) {
+  cachedPlaybackMenuTrigger = trigger;
+  updatePlaybackMenuTriggerLabel();
 }
 
-function handlePlay() {
-  syncPlaybackSpeed();
-}
+function mountCustomPlaybackMenu(menu: HTMLDivElement | null) {
+  if (menu && customPlaybackMenu.element.parentElement !== menu) {
+    const content = menu.lastElementChild;
 
-function handlePause() {
-  syncPlaybackSpeed();
-}
+    if (content instanceof HTMLElement) {
+      content.style.display = "none";
+    }
 
-function handleSeeking() {
-  syncPlaybackSpeed();
-}
-
-function handleSeeked() {
-  syncPlaybackSpeed();
-}
-
-function trackVideo(currentVideo: HTMLVideoElement | null) {
-  if (currentVideo === trackedVideo) return;
-
-  trackedVideo?.removeEventListener("ratechange", handlePlaybackRateChange);
-  trackedVideo?.removeEventListener("play", handlePlay);
-  trackedVideo?.removeEventListener("pause", handlePause);
-  trackedVideo?.removeEventListener("seeking", handleSeeking);
-  trackedVideo?.removeEventListener("seeked", handleSeeked);
-
-  trackedVideo = currentVideo;
-  customSpeedMenu = currentVideo ? createCustomSpeedMenu(currentVideo) : null;
-
-  currentVideo?.addEventListener("ratechange", handlePlaybackRateChange);
-  currentVideo?.addEventListener("play", handlePlay);
-  currentVideo?.addEventListener("pause", handlePause);
-  currentVideo?.addEventListener("seeking", handleSeeking);
-  currentVideo?.addEventListener("seeked", handleSeeked);
-}
-
-function mountCustomSpeedMenu(container: HTMLDivElement | null) {
-  if (!container || !customSpeedMenu) return;
-
-  const customMenuElement = customSpeedMenu.element;
-  if (customMenuElement.parentElement === container) return;
-
-  const nativeMenuContent = container.lastElementChild;
-
-  if (nativeMenuContent instanceof HTMLElement) {
-    nativeMenuContent.style.display = "none";
+    menu.appendChild(customPlaybackMenu.element);
   }
-
-  container.appendChild(customMenuElement);
 }
 
 function syncPlayerControls() {
-  trackVideo(getVideo());
+  const video = getVideo();
+  const playbackMenu = getPlaybackMenu();
+  const playbackMenuTrigger = getPlaybackMenuTrigger();
 
-  playbackSpeedTrigger = getPlaybackSpeedMenuTrigger();
-  syncPlaybackSpeed();
-  rewindButton = getRewindButton();
-  forwardButton = getForwardButton();
-
-  mountCustomSpeedMenu(getPlaybackSpeedMenu());
+  updateVideo(video);
+  updatePlaybackMenuTrigger(playbackMenuTrigger);
+  mountCustomPlaybackMenu(playbackMenu);
 }
 
 const playerDomObserver = new MutationObserver(syncPlayerControls);
@@ -218,40 +212,40 @@ playerDomObserver.observe(document.body, {
 
 syncPlayerControls();
 
-function handleSeekKeydown(event: KeyboardEvent) {
-  const key = event.key.toLowerCase();
+// function handleSeekKeydown(event: KeyboardEvent) {
+//   const key = event.key.toLowerCase();
 
-  if (key !== "j" && key !== "l") return;
+//   if (key !== "j" && key !== "l") return;
 
-  if (
-    event.defaultPrevented ||
-    event.ctrlKey ||
-    event.altKey ||
-    event.metaKey ||
-    event.isComposing
-  )
-    return;
+//   if (
+//     event.defaultPrevented ||
+//     event.ctrlKey ||
+//     event.altKey ||
+//     event.metaKey ||
+//     event.isComposing
+//   )
+//     return;
 
-  const target = event.target;
+//   const target = event.target;
 
-  if (
-    target instanceof HTMLElement &&
-    (target.isContentEditable || target.closest("input, textarea, select"))
-  )
-    return;
+//   if (
+//     target instanceof HTMLElement &&
+//     (target.isContentEditable || target.closest("input, textarea, select"))
+//   )
+//     return;
 
-  let button: HTMLButtonElement | null = null;
+//   let button: HTMLButtonElement | null = null;
 
-  if (key === "j") {
-    button = rewindButton;
-  } else {
-    button = forwardButton;
-  }
+//   if (key === "j") {
+//     button = rewindButton;
+//   } else {
+//     button = forwardButton;
+//   }
 
-  if (!button || !button.isConnected || button.disabled) return;
+//   if (!button || !button.isConnected || button.disabled) return;
 
-  event.preventDefault();
-  button.click();
-}
+//   event.preventDefault();
+//   button.click();
+// }
 
-window.addEventListener("keydown", handleSeekKeydown);
+// window.addEventListener("keydown", handleSeekKeydown);
