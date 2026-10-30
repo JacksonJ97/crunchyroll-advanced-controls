@@ -248,6 +248,11 @@ function handleSeekKeydown(event: KeyboardEvent) {
 
   event.preventDefault();
   seekButton.click();
+  const focusedElement = document.activeElement;
+
+  if (focusedElement instanceof HTMLElement) {
+    focusedElement.blur();
+  }
 }
 
 window.addEventListener("keydown", handleSeekKeydown);
