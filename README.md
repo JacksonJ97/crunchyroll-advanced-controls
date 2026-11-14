@@ -1,6 +1,6 @@
 # Advanced Video Controls for Crunchyroll
 
-A Chrome extension that adds 0.5x, 0.75x, 1x, 1.25x, 1.5x, and 2x playback options directly to Crunchyroll's video player, remembers your selected speed, and provides keyboard shortcuts to rewind and skip forward.
+A Chrome extension that adds 1.25x, 1.5x, and 2x playback options directly to Crunchyroll's video player, remembers your selected speed, and provides keyboard shortcuts to rewind and skip forward.
 
 ## Motivation
 
