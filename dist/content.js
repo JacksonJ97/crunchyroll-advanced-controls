@@ -1,13 +1,7 @@
 "use strict";
 console.log("[CAC] Content script loaded");
 const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
-const PLAYBACK_SYNC_EVENTS = [
-    "play",
-    "pause",
-    "seeked",
-    "seeking",
-    "ratechange",
-];
+const PLAYBACK_SYNC_EVENTS = ["play", "pause", "seeked", "seeking", "ratechange"];
 let currentVideo = null;
 let playbackMenuTrigger = null;
 const savedPlaybackSpeed = Number(localStorage.getItem("playbackRate"));

@@ -1,30 +1,21 @@
 console.log("[CAC] Content script loaded");
 
 const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
-const PLAYBACK_SYNC_EVENTS = [
-  "play",
-  "pause",
-  "seeked",
-  "seeking",
-  "ratechange",
-] as const;
+const PLAYBACK_SYNC_EVENTS = ["play", "pause", "seeked", "seeking", "ratechange"] as const;
 type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number];
 
 let currentVideo: HTMLVideoElement | null = null;
 let playbackMenuTrigger: HTMLButtonElement | null = null;
 
 const savedPlaybackSpeed = Number(localStorage.getItem("playbackRate"));
-let targetPlaybackSpeed =
-  PLAYBACK_SPEEDS.find((speed) => speed === savedPlaybackSpeed) ?? 1;
+let targetPlaybackSpeed = PLAYBACK_SPEEDS.find((speed) => speed === savedPlaybackSpeed) ?? 1;
 
 function getVideo(): HTMLVideoElement | null {
   return document.querySelector("video");
 }
 
 function getRewindButton(): HTMLButtonElement | null {
-  return document.querySelector(
-    'button[aria-label="Jump backward 10 seconds"]',
-  );
+  return document.querySelector('button[aria-label="Jump backward 10 seconds"]');
 }
 
 function getForwardButton(): HTMLButtonElement | null {
@@ -36,9 +27,7 @@ function getPlaybackMenuTrigger(): HTMLButtonElement | null {
 }
 
 function getPlaybackMenu(): HTMLDivElement | null {
-  return document.querySelector(
-    'div[role="menu"][aria-label="Playback Speed"]',
-  );
+  return document.querySelector('div[role="menu"][aria-label="Playback Speed"]');
 }
 
 function createCheckIcon() {

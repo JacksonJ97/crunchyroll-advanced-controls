@@ -87,6 +87,8 @@ Saved preferences use the page's `localStorage`, not Chrome extension storage. T
 
 ## Development
 
-Run `pnpm install` to install the TypeScript development dependency, then `pnpm build` to compile `src/content.ts` into `dist/content.js`. Use `pnpm dev` to compile automatically as source files change. These commands compile the script; they do not generate the manifest or icons in `dist`.
+Run `pnpm install` to install the development dependencies, then `pnpm build` to compile `src/content.ts` into `dist/content.js`. Use `pnpm dev` to compile automatically as source files change. These commands compile the script; they do not generate the manifest or icons in `dist`.
+
+Use `pnpm lint` to check code with Oxlint and `pnpm lint:fix` to apply automatic fixes. Use `pnpm format` to format files with Oxfmt and `pnpm format:check` to check formatting without writing changes. Both tools exclude `dist`; formatting also excludes the generated `pnpm-lock.yaml`.
 
 After rebuilding, reload the extension in `chrome://extensions` and refresh the Crunchyroll page to use the updated script. There is currently no automated test script configured in `package.json`.
