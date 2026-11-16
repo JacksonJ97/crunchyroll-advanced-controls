@@ -4,13 +4,13 @@ A Chrome extension that adds 1.25x, 1.5x, and 2x playback options directly to Cr
 
 ## Motivation
 
-I built this extension while watching One Piece, a series known for its pacing issues, because Crunchyroll's video player doesn't currently support playback speeds above 1x. I wanted the playback speed controls to feel native to Crunchyroll, so I integrated them directly into the video player rather than relying on an extension popup.
+Watching One Piece, a series known for its pacing issues, made me want faster playback options. Since Crunchyroll's video player doesn't currently support speeds above 1x, I built this extension. I wanted the playback speed controls to feel native to Crunchyroll, so I integrated them directly into the video player rather than relying on an extension popup. I also added keyboard shortcuts to skip forward and backward, since using the arrow keys on my 60% keyboard requires holding an extra key.
 
 ## Overview
 
-The extension keeps Crunchyroll's existing playback menu trigger and menu container, hides the original menu content, and mounts its own speed options inside that container. Selecting an option changes the HTML video element's `playbackRate`. Options support clicks, Enter, and Space.
+The extension keeps Crunchyroll's existing playback menu trigger and menu container, hides the original menu content, and mounts its own speed options inside that container. Selecting an option changes the HTML video element's `playbackRate`. Options can be selected by clicking or pressing Enter or Space.
 
-The script restores a supported saved speed at startup, defaults to 1x otherwise, and applies that target speed to replacement videos. Crunchyroll resets playback to 1x when playback controls are used, so the script listens for playback events and restores the target speed. The button label and selected menu item reflect the video's rate after synchronization.
+The script restores a supported saved speed at startup or defaults to 1x, then applies that target speed to replacement videos. Crunchyroll resets playback to 1x when playback controls are used, so the script listens for playback events and restores the target speed. The button label and selected menu item reflect the video's rate after synchronization.
 
 Press **J** to rewind 10 seconds or **L** to skip forward 10 seconds.
 
@@ -53,17 +53,17 @@ Each synchronization pass:
 
 ### Keyboard seek shortcuts
 
-`handleSeekKeydown()` listens on `window` for J and L to seek backward or forward 10 seconds through Crunchyroll's native buttons. It finds the button on each eligible key press, so shortcuts keep working when Crunchyroll replaces its controls.
+`handleSeekKeydown()` listens for **J** and **L** key presses on `window` to seek backward or forward 10 seconds through Crunchyroll's native buttons. It finds the corresponding button on each eligible key press, so shortcuts keep working when Crunchyroll replaces its controls.
 
 ### Building and mounting the menu
 
-`createCustomPlaybackMenu()` builds options from `PLAYBACK_SPEEDS`: 0.5x, 0.75x, 1x, 1.25x, 1.5x, and 2x. Selecting an option by click, Enter, or Space calls `setPlaybackSpeed()` to apply and save the speed when a video is available, then closes the menu through Crunchyroll's existing button.
+`createCustomPlaybackMenu()` builds options from `PLAYBACK_SPEEDS`: 0.5x, 0.75x, 1x, 1.25x, 1.5x, and 2x. Selecting an option by clicking or pressing Enter or Space calls `setPlaybackSpeed()` to apply and save the speed when a video is available, then closes the menu through Crunchyroll's existing button.
 
 `mountCustomPlaybackMenu()` hides the original content and inserts the custom options once Crunchyroll's menu container is available, keeping the native button and container to manage opening and closing. The custom menu is reused across video changes and remounted if Crunchyroll recreates the container.
 
 ### Keeping playback state and UI synchronized
 
-At startup, `targetPlaybackSpeed` loads the saved `localStorage` preference if it matches `PLAYBACK_SPEEDS`, otherwise defaulting to 1x. Selecting a custom menu option updates both the target and saved preference.
+At startup, `targetPlaybackSpeed` is set to the saved `localStorage` preference if it matches a value in `PLAYBACK_SPEEDS`; otherwise, it defaults to 1x. Selecting a custom menu option updates both the target and the saved preference.
 
 `syncPlaybackSpeed()` keeps the video at that speed across video changes and playback events (`PLAYBACK_SYNC_EVENTS`), correcting Crunchyroll's resets to 1x. It also updates the button label and calls `refreshSelection()` to keep the menu's selected state and check icon in sync with the video's actual speed.
 
