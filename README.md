@@ -1,6 +1,6 @@
 # Advanced Video Controls for Crunchyroll
 
-A Chrome extension that adds 1.25x, 1.5x, and 2x playback options directly to Crunchyroll's video player, remembers your selected speed, and provides keyboard shortcuts to rewind and skip forward.
+A Chrome extension that adds 1.25x, 1.5x, and 2x playback options directly to Crunchyroll's video player and provides keyboard shortcuts to rewind and skip forward.
 
 ## Motivation
 
@@ -8,87 +8,71 @@ I built this extension while watching One Piece, a series known for its pacing i
 
 ## Overview
 
-The extension keeps Crunchyroll's existing playback menu trigger and menu container, hides the original menu content, and mounts its own speed options inside that container. Selecting an option changes the HTML video element's `playbackRate`, saves the preference in the page's `localStorage`, and closes the menu through the existing playback menu trigger. Options support clicks, Enter, and Space.
+The extension keeps Crunchyroll's existing playback menu trigger and menu container, hides the original menu content, and mounts its own speed options inside that container. Selecting an option changes the HTML video element's `playbackRate`. Options support clicks, Enter, and Space.
 
 The script restores a supported saved speed at startup, defaults to 1x otherwise, and applies that target speed to replacement videos. Crunchyroll resets playback to 1x when playback controls are used, so the script listens for playback events and restores the target speed. The button label and selected menu item reflect the video's rate after synchronization.
 
-Press **J** to rewind 10 seconds or **L** to skip forward 10 seconds. These shortcuts trigger the player's existing seek buttons and are ignored while typing in form fields or editable content.
+Press **J** to rewind 10 seconds or **L** to skip forward 10 seconds.
 
 ## Local Installation
 
 1. Clone this repository and run `pnpm install`.
 2. Run `pnpm build` to compile the current source into `dist/content.js`.
 3. Open `chrome://extensions` in Chrome and enable **Developer mode**.
-4. Choose **Load unpacked** and select this repository's `dist` directory, which includes the manifest and icons.
+4. Choose **Load unpacked** and select this repository's `dist` directory.
 5. Open or refresh a Crunchyroll page to load the content script.
 
 ## How It Works
 
 ### Architecture and entry point
 
-The runtime is a single content script, written in [`src/content.ts`](src/content.ts). TypeScript compiles it to `dist/content.js`. The Manifest V3 configuration in `dist/manifest.json` registers that script for `https://www.crunchyroll.com/*`. There is no background service worker or popup; playback control and UI updates happen in the page's DOM.
+The runtime is a single content script, written in [`src/content.ts`](src/content.ts). TypeScript compiles it to `dist/content.js`. The Manifest V3 configuration in `dist/manifest.json` registers that script for `https://www.crunchyroll.com/*`.
 
 The script uses five selectors to find the first matching element in its document:
 
-| Element                 | Selector                                        | Purpose                                 |
-| ----------------------- | ----------------------------------------------- | --------------------------------------- |
-| Video                   | `video`                                         | Read and update playback speed.         |
-| Speed button            | `button[aria-label="Playback Speed Menu"]`      | Display the current speed.              |
-| Rewind button           | `button[aria-label="Jump backward 10 seconds"]` | Rewind through the native button.       |
-| Forward button          | `button[aria-label="Jump forward 10 seconds"]`  | Skip forward through the native button. |
-| Playback menu container | `div[role="menu"][aria-label="Playback Speed"]` | Host the custom options.                |
+| Element               | Selector                                        | Purpose                                 |
+| --------------------- | ----------------------------------------------- | --------------------------------------- |
+| Video                 | `video`                                         | Read and update playback speed.         |
+| Rewind button         | `button[aria-label="Jump backward 10 seconds"]` | Rewind through the native button.       |
+| Forward button        | `button[aria-label="Jump forward 10 seconds"]`  | Skip forward through the native button. |
+| Playback menu trigger | `button[aria-label="Playback Speed Menu"]`      | Display the current speed.              |
+| Playback menu         | `div[role="menu"][aria-label="Playback Speed"]` | Host the custom options.                |
 
 ### Finding and tracking the player
 
-The script registers a `MutationObserver` on `document.body` with `childList: true` and `subtree: true`, then calls `syncPlayerControls()` immediately. Added or removed nodes anywhere under the body trigger another synchronization pass. This handles player controls that appear later or are replaced during navigation without polling. The observer does not watch attribute changes.
+`syncPlayerControls()` runs at startup and whenever a `MutationObserver` detects added or removed nodes under `document.body`. This handles controls that appear later or are replaced during navigation without polling.
 
 Each synchronization pass:
 
-1. Queries the video, native playback menu, and menu trigger.
-2. Passes the video to `updateVideo()`.
-3. Updates the cached menu trigger and refreshes its label.
-4. Attempts to mount the custom menu in the native container.
+1. Finds the current video, native playback menu, and menu trigger.
+2. Calls `updateVideo()` to track the video and synchronize its speed.
+3. Calls `updatePlaybackMenuTrigger()` to cache the speed button and refresh its label.
+4. Calls `mountCustomPlaybackMenu()` to insert the custom options if needed.
 
-The script tracks the video in `currentVideo` and the native speed button in `playbackMenuTrigger`, creates one reusable `customPlaybackMenu`, and stores the speed the video should maintain in `targetPlaybackSpeed`. If the video reference has not changed, `updateVideo()` returns immediately. When a different video appears, it removes the old video's listeners, attaches the events listed in `PLAYBACK_SYNC_EVENTS` (`play`, `pause`, `seeked`, `seeking`, and `ratechange`) to the new video, and immediately synchronizes its speed. If no video is found, it clears `currentVideo` and refreshes the menu to clear its selection.
+`updateVideo()` tracks the video in `currentVideo`. When the video changes, it removes the old video's listeners, attaches `PLAYBACK_SYNC_EVENTS` listeners to the new video, and applies `targetPlaybackSpeed`. It skips unchanged video references and clears the menu selection when no video is available.
 
 ### Keyboard seek shortcuts
 
-The script registers `handleSeekKeydown()` on `window` once per content-script execution, after the initial synchronization. Each eligible key press queries the corresponding native seek button, so shortcuts continue to use replacement controls after DOM changes without caching seek-button references or registering additional listeners.
-
-The handler normalizes the key to lowercase and returns immediately unless it is J or L. It ignores events already prevented by another handler, Ctrl/Alt/Meta combinations, input composition, and events from inputs, textareas, selects, or editable content. Uppercase J and L also work.
-
-For an eligible key press, the handler selects the corresponding button and checks that it exists, is still connected to the document, and is not disabled. Only then does it call `preventDefault()` and `click()`, letting the native button perform the seek. Holding a shortcut key can trigger repeated seeks through repeated `keydown` events.
+`handleSeekKeydown()` listens on `window` for J and L to seek backward or forward 10 seconds through Crunchyroll's native buttons. It finds the button on each eligible key press, so shortcuts keep working when Crunchyroll replaces its controls.
 
 ### Building and mounting the menu
 
-`createCustomPlaybackMenu()` creates one item for each value in `PLAYBACK_SPEEDS`: `0.5`, `0.75`, `1`, `1.25`, `1.5`, and `2`. Each item's event handlers use `currentVideo` rather than capturing a particular video element. A click, Enter, or Space prevents the event's default action, calls `setPlaybackSpeed()`, then clicks `playbackMenuTrigger` if present to close the menu. Other keys are ignored. If a video exists, `setPlaybackSpeed()` assigns its `playbackRate`, updates `targetPlaybackSpeed`, and saves the value in `localStorage` under `playbackRate`. Without a video, it leaves the target and saved speed unchanged.
+`createCustomPlaybackMenu()` builds options from `PLAYBACK_SPEEDS`: 0.5x, 0.75x, 1x, 1.25x, 1.5x, and 2x. Selecting an option by click, Enter, or Space calls `setPlaybackSpeed()` to apply and save the speed when a video is available, then closes the menu through Crunchyroll's existing button.
 
-The items reuse Crunchyroll's `kat:` CSS classes for layout, hover, focus, and selection styling. Each item has `role="menuitemradio"`, is focusable with `tabIndex = 0`, and contains a speed label and an SVG check icon.
-
-`mountCustomPlaybackMenu()` waits for the native container; mounting does not require a video to be present. If the custom menu is already a direct child of that container, it leaves the DOM unchanged. Otherwise, it hides the container's last element child with `display: none` if that child is an `HTMLElement`, then appends the custom menu. The native button and outer menu container remain in place, so Crunchyroll continues to manage opening and closing the menu.
-
-The same custom menu is reused across video replacements. If Crunchyroll recreates the container, the next synchronization pass moves that menu into the new container.
+`mountCustomPlaybackMenu()` hides the original content and inserts the custom options once Crunchyroll's menu container is available, keeping the native button and container to manage opening and closing. The custom menu is reused across video changes and remounted if Crunchyroll recreates the container.
 
 ### Keeping playback state and UI synchronized
 
-At startup, the script converts the `localStorage` value at `playbackRate` to a number and stores it in `savedPlaybackSpeed`. It checks that value against `PLAYBACK_SPEEDS` to initialize `targetPlaybackSpeed`, defaulting to `1` if the saved value is unsupported or missing. The target is the rate the video should maintain; `currentVideo.playbackRate` is its actual rate.
+At startup, `targetPlaybackSpeed` loads the saved `localStorage` preference if it matches `PLAYBACK_SPEEDS`, otherwise defaulting to 1x. Selecting a custom menu option updates both the target and saved preference.
 
-`syncPlaybackSpeed()` runs when a new video is tracked and on every event in `PLAYBACK_SYNC_EVENTS`. If the video's actual rate differs from `targetPlaybackSpeed`, it restores the target rate. This corrects Crunchyroll's reset to 1x after using playback controls. These resets do not change the target or the saved value; selecting a custom menu option updates both.
+`syncPlaybackSpeed()` keeps the video at that speed across video changes and playback events (`PLAYBACK_SYNC_EVENTS`), correcting Crunchyroll's resets to 1x. It also updates the button label and calls `refreshSelection()` to keep the menu's selected state and check icon in sync with the video's actual speed.
 
-After synchronizing the rate, the function updates the button label and runs the menu's `refreshSelection()` function. That function compares each option with the cached video's actual rate and updates its `aria-checked` value, background class, and check-icon visibility. Selection is also initialized when the menu is created.
+The script only updates controls when their state changes, avoiding redundant DOM writes and repeated observer updates.
 
-To avoid unnecessary DOM writes, `updatePlaybackMenuTriggerLabel()` only changes the button's text when it differs, and each item's `setSelected()` compares the new state with `previousSelectionState` before updating the DOM. That state starts at `null` so the first call always renders the item's selection state. These guards, together with the video-reference and menu-parent checks, let repeated observer callbacks reuse existing controls. They also prevent the extension's own child-node changes from causing an endless update cycle.
+### Limitations
 
-### Current boundaries
-
-The implementation depends on Crunchyroll's DOM structure, English accessibility labels, and existing `kat:` styles. Changes to those selectors, classes, or the assumption that native menu content is the container's last element child may require code updates. It controls only the first video found in the content script's document.
-
-Saved preferences use the page's `localStorage`, not Chrome extension storage. The script does not catch storage access errors or listen for storage changes from other tabs. Clearing that storage removes the saved preference for future script executions. Synchronization restores the target speed if another control changes the video's rate.
+The current implementation depends on Crunchyroll's DOM structure, accessibility labels, and existing `kat:` styles. Changes to those selectors, classes, or the assumption that native menu content is the container's last element child may require code updates.
 
 ## Development
 
-Run `pnpm install` to install the development dependencies, then `pnpm build` to compile `src/content.ts` into `dist/content.js`. Use `pnpm dev` to compile automatically as source files change. These commands compile the script; they do not generate the manifest or icons in `dist`.
-
-Use `pnpm lint` to check code with Oxlint and `pnpm lint:fix` to apply automatic fixes. Use `pnpm format` to format files with Oxfmt and `pnpm format:check` to check formatting without writing changes. Both tools exclude `dist`; formatting also excludes the generated `pnpm-lock.yaml`.
-
-After rebuilding, reload the extension in `chrome://extensions` and refresh the Crunchyroll page to use the updated script. There is currently no automated test script configured in `package.json`.
+Run `pnpm install` to install the development dependencies, then `pnpm build` to compile `src/content.ts` into `dist/content.js`. Use `pnpm dev` to compile automatically as source files change. After rebuilding, reload the extension in `chrome://extensions` and refresh the Crunchyroll page to use the updated script.
