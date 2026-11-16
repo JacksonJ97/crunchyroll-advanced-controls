@@ -1,7 +1,7 @@
 {
   "name": "crunchyroll-advanced-controls",
   "version": "1.0.0",
-  "description": "Adds additional playback controls to Crunchyroll's video player.",
+  "description": "Adds playback speed controls and keyboard shortcuts to rewind and skip forward in Crunchyroll's video player.",
   "author": "JacksonJ97",
   "type": "module",
   "main": "dist/content.js",

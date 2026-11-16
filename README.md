@@ -1,4 +1,4 @@
-# Advanced Video Controls for Crunchyroll
+# Crunchyroll Advanced Controls
 
 A Chrome extension that adds 1.25x, 1.5x, and 2x playback options directly to Crunchyroll's video player and provides keyboard shortcuts to rewind and skip forward.
 
