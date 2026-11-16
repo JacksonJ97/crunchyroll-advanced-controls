@@ -7,8 +7,9 @@
   "env": {
     "browser": true
   },
-  "ignorePatterns": ["dist"],
+  "ignorePatterns": ["dist/**"],
   "rules": {
-    "no-unused-vars": "warn"
+    "no-unused-vars": "warn",
+    "typescript/no-explicit-any": "error"
   }
 }
